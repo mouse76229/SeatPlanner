@@ -39,3 +39,7 @@ SeatPlanner/
 3. 完成後送出 Pull Request，說明變更內容與目的。
 
 感謝任何形式的貢獻與回饋！
+
+## 授權
+
+本專案採用 MIT 授權 (MIT License)。詳細條款請參閱 LICENSE 檔案。
