@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
+import './index.css';
 import SeatingDesigner from './SeatingDesigner';
 
 function initApp() {
