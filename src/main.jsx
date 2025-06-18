@@ -1,17 +1,12 @@
-import React from 'react';
-import ReactDOM from 'react-dom';
+import { createRoot } from 'react-dom/client';
 import './index.css';
 import SeatingDesigner from './SeatingDesigner';
 
 function initApp() {
   const rootElement = document.getElementById('root');
   try {
-    const root = ReactDOM.createRoot ? ReactDOM.createRoot(rootElement) : null;
-    if (root) {
-      root.render(React.createElement(SeatingDesigner));
-    } else {
-      ReactDOM.render(React.createElement(SeatingDesigner), rootElement);
-    }
+    const root = createRoot(rootElement);
+    root.render(<SeatingDesigner />);
     console.log('會場座位設計系統載入成功！');
   } catch (error) {
     console.error('應用載入失敗:', error);
