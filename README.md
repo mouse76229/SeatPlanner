@@ -29,6 +29,28 @@ SeatPlanner 是一款用於活動或場地座位規劃的前端應用程式，�
    npm run preview
    ```
 
+## 部署到 GitHub Pages
+
+若要部署至 GitHub Pages，必須在 `vite.config.js` 的 `defineConfig` 中設定 `base`，
+其值應對應到此存放庫名稱：
+
+```js
+export default defineConfig({
+  base: '/SeatPlanner/',
+  plugins: [react()]
+});
+```
+
+完成設定後可透過 `gh-pages` 套件將 `dist` 目錄發佈：
+
+```bash
+npm install --save-dev gh-pages
+npm run build
+npx gh-pages -d dist
+```
+
+部署後即可從 `https://<GitHub 帳號>.github.io/SeatPlanner/` 存取應用程式。
+
 ## 專案結構
 
 ```
