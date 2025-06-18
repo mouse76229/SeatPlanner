@@ -33,11 +33,20 @@
             font-size: 18px;
             color: #666;
         }
-        /* 確保 canvas 不會模糊 */
+        /* 高解析度 Canvas 渲染 */
+        .canvas-container {
+            width: 100%;
+            overflow: hidden;
+        }
         canvas {
-            image-rendering: pixelated;
+            image-rendering: -webkit-optimize-contrast;
             image-rendering: -moz-crisp-edges;
-            image-rendering: crisp-edges;
+            image-rendering: -o-crisp-edges;
+            image-rendering: optimize-contrast;
+            -ms-interpolation-mode: nearest-neighbor;
+            image-rendering: pixelated;
+            max-width: 100%;
+            height: auto;
         }
     </style>
 </head>
@@ -190,8 +199,26 @@
           };
           
           const cellSize = 25;
-          const canvasWidth = 800;
-          const canvasHeight = 600;
+          const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
+          
+          // 響應式Canvas尺寸
+          useEffect(() => {
+            const updateCanvasSize = () => {
+              const container = document.querySelector('.canvas-container');
+              if (container) {
+                const containerWidth = container.clientWidth - 8; // 減去border寬度
+                const containerHeight = Math.max(600, window.innerHeight - 400); // 最小600px，或視窗高度-400px
+                setCanvasSize({ 
+                  width: Math.max(800, containerWidth), 
+                  height: containerHeight 
+                });
+              }
+            };
+            
+            updateCanvasSize();
+            window.addEventListener('resize', updateCanvasSize);
+            return () => window.removeEventListener('resize', updateCanvasSize);
+          }, []);
           
           // 重新分配所有座位編號
           const reassignSeatNumbers = (blockList) => {
@@ -249,12 +276,25 @@
             
             const ctx = canvas.getContext('2d');
             
-            canvas.width = canvasWidth;
-            canvas.height = canvasHeight;
+            // 高DPI支援
+            const devicePixelRatio = window.devicePixelRatio || 1;
+            const displayWidth = canvasSize.width;
+            const displayHeight = canvasSize.height;
             
-            ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+            // 設置實際像素尺寸
+            canvas.width = displayWidth * devicePixelRatio;
+            canvas.height = displayHeight * devicePixelRatio;
+            
+            // 設置顯示尺寸
+            canvas.style.width = displayWidth + 'px';
+            canvas.style.height = displayHeight + 'px';
+            
+            // 縮放繪圖上下文
+            ctx.scale(devicePixelRatio, devicePixelRatio);
+            
+            ctx.clearRect(0, 0, displayWidth, displayHeight);
             ctx.fillStyle = '#F9FAFB';
-            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+            ctx.fillRect(0, 0, displayWidth, displayHeight);
             
             // 繪製網格
             ctx.strokeStyle = '#E5E7EB';
@@ -263,16 +303,16 @@
             const gridStartX = (viewOffset.x % cellSize) - cellSize;
             const gridStartY = (viewOffset.y % cellSize) - cellSize;
             
-            for (let x = gridStartX; x <= canvasWidth; x += cellSize) {
+            for (let x = gridStartX; x <= displayWidth; x += cellSize) {
               ctx.beginPath();
               ctx.moveTo(x, 0);
-              ctx.lineTo(x, canvasHeight);
+              ctx.lineTo(x, displayHeight);
               ctx.stroke();
             }
-            for (let y = gridStartY; y <= canvasHeight; y += cellSize) {
+            for (let y = gridStartY; y <= displayHeight; y += cellSize) {
               ctx.beginPath();
               ctx.moveTo(0, y);
-              ctx.lineTo(canvasWidth, y);
+              ctx.lineTo(displayWidth, y);
               ctx.stroke();
             }
             
@@ -281,8 +321,8 @@
               const blockX = block.x + viewOffset.x;
               const blockY = block.y + viewOffset.y;
               
-              if (blockX + block.width >= 0 && blockX <= canvasWidth && 
-                  blockY + block.height >= 0 && blockY <= canvasHeight) {
+              if (blockX + block.width >= 0 && blockX <= displayWidth && 
+                  blockY + block.height >= 0 && blockY <= displayHeight) {
                 
                 ctx.fillStyle = block.color;
                 ctx.fillRect(blockX, blockY, block.width, block.height);
@@ -293,12 +333,12 @@
                 
                 if (block.type !== 'seat') {
                   ctx.fillStyle = block.type === 'aisle' ? '#374151' : '#FFFFFF';
-                  ctx.font = '12px Arial';
+                  ctx.font = 'bold 14px Arial';
                   ctx.textAlign = 'center';
                   ctx.fillText(
                     block.label || toolStyles[block.type].label,
                     blockX + block.width / 2,
-                    blockY + block.height / 2 + 4
+                    blockY + block.height / 2 + 5
                   );
                 }
                 
@@ -306,7 +346,9 @@
                   const seatWidth = block.width / block.seatsPerRow;
                   const seatHeight = block.height / block.rows;
                   
-                  ctx.font = '10px Arial';
+                  // 動態調整座位編號字體大小
+                  const fontSize = Math.max(8, Math.min(12, Math.min(seatWidth, seatHeight) * 0.4));
+                  ctx.font = `bold ${fontSize}px Arial`;
                   
                   block.seats.forEach((seat, index) => {
                     if (seat.removed) return;
@@ -328,7 +370,7 @@
                     ctx.fillText(
                       seat.number.toString(),
                       seatX + seatWidth / 2,
-                      seatY + seatHeight / 2 + 3
+                      seatY + seatHeight / 2 + fontSize/3
                     );
                   });
                 }
@@ -351,25 +393,27 @@
               ctx.setLineDash([]);
               
               ctx.fillStyle = previewBlock.type === 'aisle' ? '#374151' : '#FFFFFF';
-              ctx.font = 'bold 14px Arial';
+              ctx.font = 'bold 16px Arial';
               ctx.textAlign = 'center';
               ctx.fillText(
                 `${previewBlock.label} (${Math.round(previewBlock.width/cellSize)}×${Math.round(previewBlock.height/cellSize)})`,
                 previewX + previewBlock.width / 2,
-                previewY + previewBlock.height / 2 + 4
+                previewY + previewBlock.height / 2 + 6
               );
               
               ctx.globalAlpha = 1;
             }
-          }, [blocks, selectedBlock, designMode, previewBlock, mode, viewOffset]);
+          }, [blocks, selectedBlock, designMode, previewBlock, mode, viewOffset, canvasSize]);
           
           // 滑鼠事件處理
           const getCanvasCoordinates = (e) => {
             const canvas = canvasRef.current;
             const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
             return {
-              x: e.clientX - rect.left,
-              y: e.clientY - rect.top
+              x: (e.clientX - rect.left) * scaleX / (window.devicePixelRatio || 1),
+              y: (e.clientY - rect.top) * scaleY / (window.devicePixelRatio || 1)
             };
           };
           
@@ -404,7 +448,7 @@
           
           // 計算所有區塊的邊界範圍
           const calculateBounds = () => {
-            if (blocks.length === 0) return { minX: 0, minY: 0, maxX: 800, maxY: 600 };
+            if (blocks.length === 0) return { minX: 0, minY: 0, maxX: canvasSize.width, maxY: canvasSize.height };
             
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             
@@ -577,10 +621,15 @@
               const exportWidth = bounds.maxX - bounds.minX;
               const exportHeight = bounds.maxY - bounds.minY;
               
+              // 使用更高的解析度
+              const scale = 2; // 2倍解析度
               const exportCanvas = document.createElement('canvas');
-              exportCanvas.width = exportWidth;
-              exportCanvas.height = exportHeight;
+              exportCanvas.width = exportWidth * scale;
+              exportCanvas.height = exportHeight * scale;
               const exportCtx = exportCanvas.getContext('2d');
+              
+              // 縮放繪圖上下文
+              exportCtx.scale(scale, scale);
               
               exportCtx.fillStyle = '#FFFFFF';
               exportCtx.fillRect(0, 0, exportWidth, exportHeight);
@@ -614,12 +663,12 @@
                 
                 if (block.type !== 'seat') {
                   exportCtx.fillStyle = block.type === 'aisle' ? '#374151' : '#FFFFFF';
-                  exportCtx.font = 'bold 16px Arial';
+                  exportCtx.font = 'bold 18px Arial';
                   exportCtx.textAlign = 'center';
                   exportCtx.fillText(
                     block.label || toolStyles[block.type].label,
                     blockX + block.width / 2,
-                    blockY + block.height / 2 + 6
+                    blockY + block.height / 2 + 7
                   );
                 }
                 
@@ -627,7 +676,8 @@
                   const seatWidth = block.width / block.seatsPerRow;
                   const seatHeight = block.height / block.rows;
                   
-                  exportCtx.font = '12px Arial';
+                  const fontSize = Math.max(10, Math.min(16, Math.min(seatWidth, seatHeight) * 0.5));
+                  exportCtx.font = `bold ${fontSize}px Arial`;
                   
                   block.seats.forEach((seat, index) => {
                     if (seat.removed) return;
@@ -646,75 +696,77 @@
                     
                     exportCtx.fillStyle = seat.group ? '#FFFFFF' : '#6B7280';
                     exportCtx.textAlign = 'center';
-                    exportCtx.font = 'bold 11px Arial';
                     exportCtx.fillText(
                       seat.number.toString(),
                       seatX + seatWidth / 2,
-                      seatY + seatHeight / 2 + 4
+                      seatY + seatHeight / 2 + fontSize/3
                     );
                   });
                 }
               });
               
-              const titleHeight = 60;
-              const legendHeight = 100;
+              const titleHeight = 80;
+              const legendHeight = 120;
               const finalCanvas = document.createElement('canvas');
-              finalCanvas.width = exportWidth;
-              finalCanvas.height = exportHeight + titleHeight + legendHeight;
+              finalCanvas.width = (exportWidth + 40) * scale;
+              finalCanvas.height = (exportHeight + titleHeight + legendHeight) * scale;
               const finalCtx = finalCanvas.getContext('2d');
               
+              // 縮放最終繪圖上下文
+              finalCtx.scale(scale, scale);
+              
               finalCtx.fillStyle = '#FFFFFF';
-              finalCtx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+              finalCtx.fillRect(0, 0, exportWidth + 40, exportHeight + titleHeight + legendHeight);
               
               finalCtx.fillStyle = '#1F2937';
-              finalCtx.font = 'bold 24px Arial';
+              finalCtx.font = 'bold 28px Arial';
               finalCtx.textAlign = 'center';
-              finalCtx.fillText('會場座位配置圖', finalCanvas.width / 2, 35);
+              finalCtx.fillText('會場座位配置圖', (exportWidth + 40) / 2, 40);
               
-              finalCtx.drawImage(exportCanvas, 0, titleHeight);
+              finalCtx.drawImage(exportCanvas, 20, titleHeight);
               
-              const legendY = titleHeight + exportHeight + 20;
+              const legendY = titleHeight + exportHeight + 30;
               finalCtx.fillStyle = '#374151';
-              finalCtx.font = 'bold 16px Arial';
+              finalCtx.font = 'bold 18px Arial';
               finalCtx.textAlign = 'left';
-              finalCtx.fillText('圖例：', 20, legendY);
+              finalCtx.fillText('圖例：', 30, legendY);
               
-              let legendX = 20;
-              const legendItemHeight = 25;
+              let legendX = 30;
+              const legendItemHeight = 30;
               
               Object.entries(toolStyles).forEach(([tool, style], index) => {
-                const itemY = legendY + 25 + Math.floor(index / 4) * legendItemHeight;
-                const itemX = legendX + (index % 4) * 150;
+                const itemY = legendY + 30 + Math.floor(index / 4) * legendItemHeight;
+                const itemX = legendX + (index % 4) * 180;
                 
                 finalCtx.fillStyle = style.color;
-                finalCtx.fillRect(itemX, itemY - 12, 16, 16);
+                finalCtx.fillRect(itemX, itemY - 15, 20, 20);
                 finalCtx.strokeStyle = '#6B7280';
                 finalCtx.lineWidth = 1;
-                finalCtx.strokeRect(itemX, itemY - 12, 16, 16);
+                finalCtx.strokeRect(itemX, itemY - 15, 20, 20);
                 
                 finalCtx.fillStyle = '#374151';
-                finalCtx.font = '12px Arial';
-                finalCtx.fillText(style.label, itemX + 20, itemY);
+                finalCtx.font = '14px Arial';
+                finalCtx.fillText(style.label, itemX + 25, itemY);
               });
               
               if (mode === 'assign' && groups.length > 0) {
                 finalCtx.fillStyle = '#374151';
-                finalCtx.font = 'bold 14px Arial';
-                finalCtx.fillText('群體分配：', 20, legendY + 60);
+                finalCtx.font = 'bold 16px Arial';
+                finalCtx.fillText('群體分配：', 30, legendY + 70);
                 
                 groups.forEach((group, index) => {
-                  const itemY = legendY + 80 + Math.floor(index / 4) * legendItemHeight;
-                  const itemX = 20 + (index % 4) * 150;
+                  const itemY = legendY + 95 + Math.floor(index / 4) * legendItemHeight;
+                  const itemX = 30 + (index % 4) * 180;
                   
                   finalCtx.fillStyle = group.color;
-                  finalCtx.fillRect(itemX, itemY - 12, 16, 16);
+                  finalCtx.fillRect(itemX, itemY - 15, 20, 20);
                   finalCtx.strokeStyle = '#6B7280';
                   finalCtx.lineWidth = 1;
-                  finalCtx.strokeRect(itemX, itemY - 12, 16, 16);
+                  finalCtx.strokeRect(itemX, itemY - 15, 20, 20);
                   
                   finalCtx.fillStyle = '#374151';
-                  finalCtx.font = '12px Arial';
-                  finalCtx.fillText(`${group.name} (${group.size}人)`, itemX + 20, itemY);
+                  finalCtx.font = '14px Arial';
+                  finalCtx.fillText(`${group.name} (${group.size}人)`, itemX + 25, itemY);
                 });
               }
               
@@ -1362,19 +1414,20 @@
                       designMode === 'pan' && "拖拉畫布來移動視野，設計超大型會場佈局"
                     ),
                     
-                    React.createElement('div', { className: "border-2 border-gray-300 rounded-lg overflow-hidden" },
+                    React.createElement('div', { className: "border-2 border-gray-300 rounded-lg overflow-hidden canvas-container" },
                       React.createElement('canvas', {
                         ref: canvasRef,
-                        width: canvasWidth,
-                        height: canvasHeight,
+                        width: canvasSize.width,
+                        height: canvasSize.height,
                         onMouseDown: handleMouseDown,
                         onMouseMove: handleMouseMove,
                         onMouseUp: handleMouseUp,
                         className: 
-                          designMode === 'create' ? 'cursor-crosshair' : 
-                          designMode === 'move' ? 'cursor-move' : 
-                          designMode === 'pan' ? (isCanvasDragging ? 'cursor-grabbing' : 'cursor-grab') :
-                          'cursor-pointer'
+                          designMode === 'create' ? 'cursor-crosshair block' : 
+                          designMode === 'move' ? 'cursor-move block' : 
+                          designMode === 'pan' ? (isCanvasDragging ? 'cursor-grabbing block' : 'cursor-grab block') :
+                          'cursor-pointer block',
+                        style: { maxWidth: '100%', height: 'auto' }
                       })
                     ),
                     
