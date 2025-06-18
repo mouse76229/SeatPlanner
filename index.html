@@ -424,70 +424,149 @@
             };
           };
           
-          // 導出CSV檔案
+          // 導出會場布局 CSV 檔案（視覺化座位圖）
           const exportToCSV = () => {
             try {
-              let csvContent = '\ufeff';
+              // 計算會場邊界
+              const bounds = calculateBounds();
+              const gridWidth = Math.ceil((bounds.maxX - bounds.minX) / cellSize);
+              const gridHeight = Math.ceil((bounds.maxY - bounds.minY) / cellSize);
               
-              csvContent += '座位配置總覽\n';
-              csvContent += '座位編號,區塊名稱,行數,列數,群體名稱,群體人數,狀態\n';
+              // 創建二維陣列來表示會場布局
+              const grid = Array(gridHeight).fill().map(() => Array(gridWidth).fill(''));
               
-              blocks.filter(block => block.type === 'seat').forEach((block, blockIndex) => {
-                if (block.seats) {
-                  block.seats.forEach(seat => {
-                    if (!seat.removed) {
-                      const escapedName = seat.group ? `"${seat.group.name}"` : '未分配';
-                      const groupSize = seat.group ? seat.group.size : '';
-                      csvContent += `${seat.number},"座位區${blockIndex + 1}",${seat.row + 1},${seat.seat + 1},${escapedName},${groupSize},可用\n`;
+              // 填入區塊資訊
+              blocks.forEach(block => {
+                const startX = Math.floor((block.x - bounds.minX) / cellSize);
+                const startY = Math.floor((block.y - bounds.minY) / cellSize);
+                const endX = Math.min(gridWidth - 1, Math.floor((block.x + block.width - bounds.minX) / cellSize));
+                const endY = Math.min(gridHeight - 1, Math.floor((block.y + block.height - bounds.minY) / cellSize));
+                
+                if (block.type === 'seat' && block.seats) {
+                  // 處理座位區塊 - 顯示座位編號
+                  const blockCols = Math.floor(block.width / cellSize);
+                  const blockRows = Math.floor(block.height / cellSize);
+                  const seatsPerCol = Math.ceil(block.seatsPerRow / blockCols);
+                  const seatsPerRowInGrid = Math.ceil(block.rows / blockRows);
+                  
+                  for (let gridY = startY; gridY <= endY; gridY++) {
+                    for (let gridX = startX; gridX <= endX; gridX++) {
+                      // 計算這個網格位置對應的座位
+                      const relativeX = gridX - startX;
+                      const relativeY = gridY - startY;
+                      
+                      // 計算座位在原始座位陣列中的位置
+                      const seatCol = Math.floor((relativeX * block.seatsPerRow) / blockCols);
+                      const seatRow = Math.floor((relativeY * block.rows) / blockRows);
+                      
+                      if (seatRow < block.rows && seatCol < block.seatsPerRow) {
+                        const seatIndex = seatRow * block.seatsPerRow + seatCol;
+                        const seat = block.seats[seatIndex];
+                        
+                        if (seat && !seat.removed) {
+                          let cellContent = seat.number.toString();
+                          if (seat.group) {
+                            cellContent += `[${seat.group.name}]`;
+                          }
+                          grid[gridY][gridX] = cellContent;
+                        } else {
+                          grid[gridY][gridX] = '■'; // 被移除的座位用實心方塊表示
+                        }
+                      }
                     }
-                  });
+                  }
+                } else {
+                  // 處理其他區塊（舞台、走道、貴賓席）
+                  const blockLabel = block.label || toolStyles[block.type]?.label || block.type;
+                  for (let gridY = startY; gridY <= endY; gridY++) {
+                    for (let gridX = startX; gridX <= endX; gridX++) {
+                      if (block.type === 'aisle') {
+                        grid[gridY][gridX] = '---'; // 走道用橫線表示
+                      } else if (block.type === 'stage') {
+                        grid[gridY][gridX] = '舞台';
+                      } else if (block.type === 'vip') {
+                        grid[gridY][gridX] = 'VIP';
+                      } else {
+                        grid[gridY][gridX] = blockLabel;
+                      }
+                    }
+                  }
                 }
               });
               
+              // 生成 CSV 內容
+              let csvContent = '\ufeff'; // UTF-8 BOM
+              
+              // 添加標題
+              csvContent += '會場座位布局圖\n';
+              csvContent += `生成時間: ${new Date().toLocaleString('zh-TW')}\n`;
+              csvContent += `總座位數: ${totalSeats} | 已分配: ${assignedSeats} | 剩餘: ${totalSeats - assignedSeats}\n`;
               csvContent += '\n';
               
-              csvContent += '群體分配統計\n';
-              csvContent += '群體名稱,需求人數,已分配座位,未分配人數,分配率\n';
-              
-              groups.forEach(group => {
-                const assignedCount = blocks
-                  .filter(block => block.type === 'seat')
-                  .reduce((sum, block) => 
-                    sum + (block.seats ? block.seats.filter(seat => !seat.removed && seat.group?.id === group.id).length : 0), 0);
-                
-                const unassigned = Math.max(0, group.size - assignedCount);
-                const assignmentRate = group.size > 0 ? `${Math.round((assignedCount / group.size) * 100)}%` : '0%';
-                
-                csvContent += `"${group.name}",${group.size},${assignedCount},${unassigned},${assignmentRate}\n`;
-              });
-              
+              // 添加圖例說明
+              csvContent += '圖例說明:\n';
+              csvContent += '數字 = 座位編號, [群組名] = 已分配群組, ■ = 已移除座位\n';
+              csvContent += '--- = 走道, 舞台 = 舞台區域, VIP = 貴賓席\n';
               csvContent += '\n';
               
-              csvContent += '統計摘要\n';
-              csvContent += '項目,數值,說明\n';
-              csvContent += `總座位數,${totalSeats},所有可用座位的總數\n`;
-              csvContent += `已分配座位,${assignedSeats},已分配給群體的座位數\n`;
-              csvContent += `未分配座位,${totalSeats - assignedSeats},尚未分配的座位數\n`;
-              csvContent += `群體總數,${groups.length},報名群體的總數量\n`;
-              csvContent += `需求人數,${totalNeeded},所有群體的人數總和\n`;
-              csvContent += `分配完成率,${totalNeeded > 0 ? Math.round((assignedSeats / totalNeeded) * 100) : 0}%,已分配座位佔需求人數的比例\n`;
-              csvContent += `座位利用率,${totalSeats > 0 ? Math.round((assignedSeats / totalSeats) * 100) : 0}%,已分配座位佔總座位的比例\n`;
+              // 添加群組色彩對照表
+              if (groups.length > 0) {
+                csvContent += '群組對照表:\n';
+                groups.forEach(group => {
+                  const assignedCount = blocks
+                    .filter(block => block.type === 'seat')
+                    .reduce((sum, block) => 
+                      sum + (block.seats ? block.seats.filter(seat => !seat.removed && seat.group?.id === group.id).length : 0), 0);
+                  csvContent += `[${group.name}] = ${assignedCount}/${group.size}人\n`;
+                });
+                csvContent += '\n';
+              }
               
+              csvContent += '座位布局:\n';
+              
+              // 添加列標題（A, B, C...）
+              let headerRow = ',';
+              for (let x = 0; x < gridWidth; x++) {
+                const colLabel = String.fromCharCode(65 + (x % 26)); // A-Z循環
+                headerRow += `${colLabel},`;
+              }
+              csvContent += headerRow + '\n';
+              
+              // 添加布局數據
+              for (let y = 0; y < gridHeight; y++) {
+                let row = `${y + 1},`; // 行號
+                for (let x = 0; x < gridWidth; x++) {
+                  const cellValue = grid[y][x] || '';
+                  // 處理包含逗號的內容
+                  const escapedValue = cellValue.includes(',') ? `"${cellValue}"` : cellValue;
+                  row += `${escapedValue},`;
+                }
+                csvContent += row + '\n';
+              }
+              
+              // 在底部添加統計資訊
+              csvContent += '\n統計資訊:\n';
+              csvContent += `會場尺寸,${gridWidth} x ${gridHeight} 格\n`;
+              csvContent += `區塊總數,${blocks.length}\n`;
+              csvContent += `座位區塊,${blocks.filter(b => b.type === 'seat').length}\n`;
+              csvContent += `其他區塊,${blocks.filter(b => b.type !== 'seat').length}\n`;
+              
+              // 創建並下載檔案
               const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
               const url = URL.createObjectURL(blob);
               const link = document.createElement('a');
               link.href = url;
-              link.download = `會場座位配置_${new Date().toISOString().slice(0, 10)}.csv`;
+              link.download = `會場布局圖_${new Date().toISOString().slice(0, 10)}.csv`;
               link.style.display = 'none';
               document.body.appendChild(link);
               link.click();
               document.body.removeChild(link);
               URL.revokeObjectURL(url);
               
-              console.log('CSV檔案導出成功');
+              console.log('會場布局 CSV 檔案導出成功');
             } catch (error) {
-              console.error('CSV導出失敗:', error);
-              alert('CSV檔案導出失敗，請檢查瀏覽器控制台了解詳情');
+              console.error('會場布局導出失敗:', error);
+              alert('會場布局導出失敗，請檢查瀏覽器控制台了解詳情');
             }
           };
           
@@ -1240,12 +1319,12 @@
                         disabled: blocks.length === 0
                       },
                         React.createElement(Download, { className: "w-4 h-4 mr-2" }),
-                        "導出CSV檔案"
+                        "導出布局表格"
                       )
                     ),
                     React.createElement('div', { className: "text-xs text-gray-500 mt-2 space-y-1" },
                       React.createElement('p', null, "• PNG：完整會場佈局圖片，包含標題和圖例"),
-                      React.createElement('p', null, "• CSV：詳細座位配置數據，包含統計分析")
+                      React.createElement('p', null, "• 布局表格：Excel 可開啟的座位圖表格，顯示座位編號和分配")
                     )
                   ),
                   
