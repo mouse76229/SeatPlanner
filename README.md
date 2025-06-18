@@ -8,36 +8,41 @@ SeatPlanner 是一款用於活動或場地座位規劃的前端應用程式，�
 - **座位編號與群體分配**：可根據座位編號或群體名單自動配置座位，支援快速重新編號。
 - **座位圖匯出**：設計完成後可以下載 PNG 圖檔，方便列印或分享。
 
+
 ## 如何在本地端啟動
 
-本專案為純前端網頁，只需瀏覽器即可執行。建議使用簡易的本地伺服器開啟，以避免部分瀏覽器的跨域限制。
+本專案使用 Vite 進行開發與建置，請先確認已安裝 Node.js。
 
-1. 安裝需求：任一現代瀏覽器（Chrome、Firefox 等）。若要自行打包程式碼，需安裝 Node.js 與 Python 3。
-2. 下載或複製此專案檔案到本地端。
-3. （選擇性）安裝相依套件並產生 `bundle.js`：
+1. 下載或複製此專案。
+2. 安裝相依套件：
    ```bash
    npm install
-   npm run build
    ```
-4. 在專案根目錄啟動伺服器：
+3. 啟動開發伺服器：
    ```bash
-   python3 -m http.server
+   npm run dev
    ```
-5. 開啟瀏覽器並前往 <http://localhost:8000/index.html> 即可開始使用。
-
-若只想快速查看，也可以直接以瀏覽器打開 `index.html` 檔案。
+   依照終端機顯示的網址開啟瀏覽器（預設 http://localhost:5173/）。
+4. 建置正式版並預覽：
+   ```bash
+   npm run build
+   npm run preview
+   ```
 
 ## 專案結構
 
 ```
 SeatPlanner/
-├── index.html      # 入口 HTML
-├── src/            # React 原始碼
+├── index.html           # 入口 HTML
+├── src/                 # React 原始碼
 │   ├── main.jsx
 │   ├── SeatingDesigner.jsx
-│   └── icons.js
-├── webpack.config.js
-└── README.md       # 專案說明文件
+│   ├── icons.js
+│   └── index.css
+├── vite.config.js
+├── tailwind.config.js
+├── postcss.config.js
+└── README.md            # 專案說明文件
 ```
 
 ## 貢獻方式
